@@ -70,7 +70,7 @@ export default async function handler(request, response) {
 
   try {
     if (request.method === 'GET') {
-      // Ownership is intentionally not checked here; the next defense step adds it.
+      // Scope the lookup to the verified user's notes.
       const { data, error } = await supabase
         .from('learning_notes')
         .select('id, title, content')

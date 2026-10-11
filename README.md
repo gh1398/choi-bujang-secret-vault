@@ -1,6 +1,6 @@
-# BYTE BACK 방어전 시작 틀 R5 · 4단계
+# BYTE BACK 방어전 시작 틀 R5 · 5단계
 
-이 저장소는 BYTE BACK 방어전 4단계의 학습용 자료실입니다. 자료 네 건은 모두 가상 메모이며 실제 학생 자료, 토큰, 비밀키를 저장하지 마세요.
+이 저장소는 BYTE BACK 방어전 5단계의 학습용 자료실입니다. 자료 네 건은 모두 가상 메모이며 실제 학생 자료, 토큰, 비밀키를 저장하지 마세요.
 
 ## 현재 동작
 
@@ -8,6 +8,7 @@
 - `api/notes.js`의 목록은 검증된 사용자 ID의 메모만 반환하고, 추가할 때 서버가 확인한 ID를 `owner_id`로 저장합니다. 단건 GET·PUT·DELETE도 DB의 `owner_id`를 검증된 사용자 ID와 비교하며, 타인 소유 또는 없는 메모는 404로 거부합니다. PUT은 저장할 `owner_id`도 검증된 사용자 ID로 설정하고 반환된 소유자를 확인합니다.
 - 모든 자료 API 경로는 `Authorization: Bearer <Supabase access token>`을 요구합니다. `src/verify-login.mjs`가 Supabase Auth 발급자·대상·만료를 검증하고, 브라우저의 `userId`·`role`과 URL·본문의 `owner_id`는 신뢰하지 않습니다. 토큰이 없거나 검증에 실패하면 401로 자료 없이 거부합니다. DB 권한/RLS SQL은 별도 검토·적용 대상입니다.
 - 서버 함수는 Vercel 환경 변수 `SUPABASE_URL`과 `SUPABASE_SECRET_KEY`를 사용합니다. 프로젝트 설정의 환경 변수 화면에서 직접 등록하세요. 비밀 키는 브라우저 코드, 응답, 로그 또는 Git에 넣지 않습니다. 함수는 오류 상세나 키를 로그로 남기지 않습니다.
+- `aleph.config.json`의 `originalApiUrl`은 로그인 토큰을 요구하는 원본 자료 API `https://choi-bujang-secret-vault-ruby.vercel.app/api/notes`를 가리킵니다. 주소에는 쿼리 문자열이 없습니다.
 - Vercel 빌드는 공개 `data.json`을 만들지 않습니다. 배포 빌드는 Vercel Git/배포 정보를 검증해 `/aleph.json`을 계속 생성합니다.
 
 ## 설정 및 실행
@@ -58,6 +59,6 @@ git grep -n -F -e '실습용 가상 과제 기록' -e '실습용 가상 포트�
 
 ## 다음 단계의 코딩 도구에 전달할 규칙
 
-[AGENTS.md](AGENTS.md)를 먼저 읽히고 한 번에 한 제작 단위만 요청하세요. 4단계에서는 API가 단건 메모의 소유자를 확인합니다. 이후 단계의 추가 허용 경로·원본 API 주소·정책 규칙은 해당 단계 원고와 계약에 맞춰 추가합니다. 비밀번호·토큰·서버 전용 키·실제 학생 기록을 코드, Git, 제출 묶음에 넣지 않습니다.
+[AGENTS.md](AGENTS.md)를 먼저 읽히고 한 번에 한 제작 단위만 요청하세요. 4단계 API 소유자 검사는 유지되며, 5단계 원본 자료 API 주소는 `aleph.config.json`에 기록되어 있습니다. 이후 단계의 추가 허용 경로·원본 API 주소·정책 규칙은 해당 단계 원고와 계약에 맞춰 추가합니다. 비밀번호·토큰·서버 전용 키·실제 학생 기록을 코드, Git, 제출 묶음에 넣지 않습니다.
 
 `src/decider.mjs`와 `src/detect.mjs`의 로컬 시험은 반 엔진이나 운영 심판의 결과가 아닙니다. 제출 묶음 계약 `aleph.defense.submission.v2`는 `scripts/bundle.mjs`에 남아 있으며, 코딩 도구가 해당 단계의 최신 배포 주소와 Git 원격을 맞춘 뒤 사용합니다.
