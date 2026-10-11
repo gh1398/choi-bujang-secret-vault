@@ -8,11 +8,24 @@ export function deploymentIdentity(env, config) {
   const repo = env.VERCEL_GIT_REPO_SLUG;
   const commit = env.VERCEL_GIT_COMMIT_SHA;
   const host = env.VERCEL_URL;
+  let originalApiUrl = null;
+  if (config?.originalApiUrl !== undefined && config.originalApiUrl !== null) {
+    let source;
+    try { source = new URL(config.originalApiUrl); } catch { source = null; }
+    if (typeof config.originalApiUrl !== 'string' || !source
+        || config.originalApiUrl !== config.originalApiUrl.trim()
+        || source.protocol !== 'https:' || source.username || source.password
+        || source.search || source.hash) {
+      throw new Error('원본 자료 API HTTPS 주소를 확인할 수 없습니다.');
+    }
+    originalApiUrl = config.originalApiUrl;
+  }
   if (env.VERCEL_GIT_PROVIDER !== 'github' || !OWNER.test(owner || '')
       || !REPO.test(repo || '') || repo === '.' || repo === '..'
       || repo.toLowerCase().endsWith('.git') || !SHA.test(commit || '')
       || !HOST.test(host || '') || !Number.isInteger(config?.step)
       || config.step < 2 || config.step > 12
+      || (config.step >= 5 && !originalApiUrl)
       || typeof config.judgeIssuer !== 'string'
       || !/^https:\/\/[a-z0-9-]+\.up\.railway\.app\/defense\/judge$/iu.test(config.judgeIssuer)
       || typeof config.sampleMarker !== 'string'
@@ -27,5 +40,6 @@ export function deploymentIdentity(env, config) {
     publicAppUrl: `https://${host.toLowerCase()}`,
     judgeIssuer: config.judgeIssuer,
     sampleMarker: config.sampleMarker,
+    originalApiUrl,
   };
 }

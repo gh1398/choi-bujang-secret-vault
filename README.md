@@ -8,14 +8,14 @@
 - `api/notes.js`의 목록은 검증된 사용자 ID의 메모만 반환하고, 추가할 때 서버가 확인한 ID를 `owner_id`로 저장합니다. 단건 GET·PUT·DELETE도 DB의 `owner_id`를 검증된 사용자 ID와 비교하며, 타인 소유 또는 없는 메모는 404로 거부합니다. PUT은 저장할 `owner_id`도 검증된 사용자 ID로 설정하고 반환된 소유자를 확인합니다.
 - 모든 자료 API 경로는 `Authorization: Bearer <Supabase access token>`을 요구합니다. `src/verify-login.mjs`가 Supabase Auth 발급자·대상·만료를 검증하고, 브라우저의 `userId`·`role`과 URL·본문의 `owner_id`는 신뢰하지 않습니다. 토큰이 없거나 검증에 실패하면 401로 자료 없이 거부합니다. DB 권한/RLS SQL은 별도 검토·적용 대상입니다.
 - 서버 함수는 Vercel 환경 변수 `SUPABASE_URL`과 `SUPABASE_SECRET_KEY`를 사용합니다. 프로젝트 설정의 환경 변수 화면에서 직접 등록하세요. 비밀 키는 브라우저 코드, 응답, 로그 또는 Git에 넣지 않습니다. 함수는 오류 상세나 키를 로그로 남기지 않습니다.
-- `aleph.config.json`의 `originalApiUrl`은 로그인 토큰을 요구하는 원본 자료 API `https://choi-bujang-secret-vault-ruby.vercel.app/api/notes`를 가리킵니다. 주소에는 쿼리 문자열이 없습니다.
+- `aleph.config.json`의 `originalApiUrl`은 원본 자료 HTTPS 경로이며 쿼리가 없습니다. Vercel 배포 빌드는 이 값을 `/aleph.json`에도 기록합니다.
 - Vercel 빌드는 공개 `data.json`을 만들지 않습니다. 배포 빌드는 Vercel Git/배포 정보를 검증해 `/aleph.json`을 계속 생성합니다.
 
 ## 설정 및 실행
 
 Supabase Auth에서 이메일·비밀번호 로그인을 사용할 수 있게 설정하고, `learning_notes` 테이블을 준비합니다. 테이블은 RLS가 켜져 있어야 하며 브라우저 역할에 읽기 권한을 주지 않습니다. `owner_id`는 UUID 열이며 `auth.users` 외래키를 사용하지 않습니다. 서버 함수는 Vercel의 `SUPABASE_SECRET_KEY`로 발급자 정보를 검증하고 자료를 읽습니다.
 
-Vercel 프로젝트 설정의 Environment Variables에 `SUPABASE_URL`과 `SUPABASE_SECRET_KEY`를 등록한 뒤 `main`에 푸시해 배포합니다. 정상 동작은 로그인 전 자료 요청이 거부되고, 정상 이메일·비밀번호 로그인 후 내 메모 목록이 표시되며 추가·수정·삭제가 동작하고 `/aleph.json`에 현재 저장소·커밋·배포 주소가 나오는 것입니다. 다른 계정 소유 메모의 단건 GET·PUT·DELETE는 404여야 합니다. 로그인 실패 이유는 화면에 표시합니다. API에는 유효한 로그인 토큰이 없거나 검증에 실패하면 401과 자료 없는 응답을 반환합니다.
+Vercel 프로젝트 설정의 Environment Variables에 `SUPABASE_URL`과 `SUPABASE_SECRET_KEY`를 등록한 뒤 `main`에 푸시해 배포합니다. 정상 동작은 로그인 전 자료 요청이 거부되고, 정상 이메일·비밀번호 로그인 후 내 메모 목록이 표시되며 추가·수정·삭제가 동작하고 `/aleph.json`에 현재 저장소·커밋·배포 주소와 `originalApiUrl`이 나오는 것입니다. 다른 계정 소유 메모의 단건 GET·PUT·DELETE는 404여야 합니다. 로그인 실패 이유는 화면에 표시합니다. API에는 유효한 로그인 토큰이 없거나 검증에 실패하면 401과 자료 없는 응답을 반환합니다.
 
 로컬 정적 미리보기는 `npm run build -- --local`로 준비할 수 있습니다. 이 명령은 `/aleph.json`을 만들지 않으며 Vercel 배포나 Supabase 연결을 증명하지 않습니다. 로컬 API 실행은 Vercel 개발 환경을 사용하세요.
 
