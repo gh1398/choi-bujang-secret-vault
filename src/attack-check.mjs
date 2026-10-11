@@ -30,20 +30,28 @@ export async function runAttackChecks(config) {
       method: 'GET', credentials: 'omit', cache: 'no-store', redirect: 'error',
       signal: AbortSignal.timeout(10000),
     });
-    observed = `비로그인 요청에서 자료 API를 확인하지 못함 (HTTP ${response.status})`;
-    if (response.ok) {
+    observed = `비로그인 요청 응답 확인 (HTTP ${response.status})`;
+    if (response.status === 401) {
       try {
         const data = await response.json();
-        const actual = Array.isArray(data?.notes) ? data.notes : [];
-        const matches = data?.sampleMarker === config.sampleMarker
-          && actual.length === SAMPLE_NOTES.length
-          && SAMPLE_NOTES.every((sample, index) => actual[index]?.title === sample.title
-            && actual[index]?.content === sample.content);
-        observed = matches
-          ? '비로그인 응답에서 허용된 가상 메모 네 건만 확인'
-          : '비로그인 응답이 네 가상 메모 허용 목록과 일치하지 않음';
+        observed = data?.error === 'UNAUTHORIZED' && !Object.hasOwn(data, 'notes')
+          ? '비로그인 요청이 HTTP 401로 거부되고 자료 필드가 없음'
+          : '비로그인 401 응답 형식에 자료 필드가 포함됨';
       } catch {
-        observed = '비로그인 자료 API가 JSON 응답을 반환하지 않음';
+        observed = '비로그인 요청이 HTTP 401로 거부됐지만 JSON 응답을 확인하지 못함';
+      }
+    } else if (response.ok) {
+      try {
+        const data = await response.json();
+        const actual = Array.isArray(data) ? data : [];
+        const matches = actual.length === SAMPLE_NOTES.length
+          && SAMPLE_NOTES.every((sample, index) => actual[index]?.title === sample.title
+            && actual[index]?.body === sample.content);
+        observed = matches
+          ? '비로그인 응답에서 자료 접근 가능성을 확인함'
+          : '비로그인 요청이 거부되지 않고 JSON을 반환함';
+      } catch {
+        observed = '비로그인 요청이 거부되지 않고 JSON이 아닌 응답을 반환함';
       }
     }
   } catch {
@@ -52,7 +60,7 @@ export async function runAttackChecks(config) {
 
   return [{
     attackId: 'anonymous_notes_api',
-    expected: '공개 API는 네 가상 메모만 반환하며 비밀값은 노출하지 않음',
+    expected: '비로그인 요청은 HTTP 401로 거부되고 자료를 반환하지 않음',
     observed,
   }];
 }

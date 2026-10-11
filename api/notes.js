@@ -1,39 +1,101 @@
+import { randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { createClient } from '@supabase/supabase-js';
+import { createLoginVerifier } from '../src/verify-login.mjs';
 
-const SAMPLE_NOTES = [
-  { title: '과제', content: '실습용 가상 과제 기록' },
-  { title: '포트폴리오', content: '실습용 가상 포트폴리오 기록' },
-  { title: '아침 리추얼', content: '실습용 가상 리추얼 기록' },
-  { title: '훈련 행정 자료', content: '실습용 가상 행정 기록' },
-];
+const config = JSON.parse(readFileSync(new URL('../aleph.config.json', import.meta.url), 'utf8'));
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
+let verifyLogin;
+
+function getLoginVerifier() {
+  verifyLogin ??= createLoginVerifier({
+    config,
+    supabaseSecretKey: process.env.SUPABASE_SECRET_KEY,
+  });
+  return verifyLogin;
+}
+
+async function authenticatedUser(request) {
+  const authorization = request.headers?.authorization ?? request.headers?.Authorization;
+  try {
+    const identity = await getLoginVerifier()(authorization);
+    return identity?.kind === 'student' ? identity : null;
+  } catch {
+    return null;
+  }
+}
+
+function getSupabase() {
+  const url = process.env.SUPABASE_URL;
+  const secretKey = process.env.SUPABASE_SECRET_KEY;
+  if (!url || !secretKey) return null;
+  return createClient(url, secretKey, {
+    auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false },
+  });
+}
+
+function parseBody(request) {
+  let body = request.body;
+  if (Buffer.isBuffer(body)) body = body.toString('utf8');
+  if (typeof body === 'string') {
+    try { body = JSON.parse(body); } catch { return null; }
+  }
+  return body && typeof body === 'object' && !Array.isArray(body) ? body : null;
+}
+
+function validFields(body) {
+  return typeof body?.title === 'string' && body.title.trim().length > 0
+    && body.title.trim().length <= 120
+    && typeof body?.body === 'string' && body.body.trim().length > 0
+    && body.body.length <= 10000;
+}
+
+function apiError(response, status, error) {
+  return response.status(status).json({ error });
+}
 
 export default async function handler(request, response) {
   response.setHeader('Cache-Control', 'no-store');
-  if (request.method !== 'GET') {
-    response.setHeader('Allow', 'GET');
-    return response.status(405).json({ error: 'METHOD_NOT_ALLOWED' });
+  if (!['GET', 'POST'].includes(request.method)) {
+    response.setHeader('Allow', 'GET, POST');
+    return apiError(response, 405, 'METHOD_NOT_ALLOWED');
   }
 
-  const supabaseUrl = process.env.SUPABASE_URL;
-  const secretKey = process.env.SUPABASE_SECRET_KEY;
-  if (!supabaseUrl || !secretKey) {
-    return response.status(503).json({ error: 'NOTES_UNAVAILABLE' });
-  }
+  const identity = await authenticatedUser(request);
+  if (!identity) return apiError(response, 401, 'UNAUTHORIZED');
+
+  const supabase = getSupabase();
+  if (!supabase) return apiError(response, 503, 'NOTES_UNAVAILABLE');
 
   try {
-    const supabase = createClient(supabaseUrl, secretKey, {
-      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
-    });
+    if (request.method === 'GET') {
+      const { data, error } = await supabase
+        .from('learning_notes')
+        .select('id, title, content')
+        .eq('owner_id', identity.userId)
+        .order('created_at', { ascending: true });
+      if (error) return apiError(response, 502, 'NOTES_UNAVAILABLE');
+      return response.status(200).json((data || []).map(note => ({
+        id: note.id, title: note.title, body: note.content,
+      })));
+    }
+
+    const body = parseBody(request);
+    if (!validFields(body)) return apiError(response, 400, 'INVALID_NOTE');
+    if (body.id !== undefined && (typeof body.id !== 'string' || !UUID.test(body.id))) {
+      return apiError(response, 400, 'INVALID_NOTE_ID');
+    }
+
+    const id = body.id ?? randomUUID();
     const { data, error } = await supabase
       .from('learning_notes')
-      .select('owner_id, title, content')
-      .is('owner_id', null);
-    if (error) return response.status(502).json({ error: 'NOTES_UNAVAILABLE' });
-
-    const stored = new Map((data || []).map((note) => [note.title, note.content]));
-    const notes = SAMPLE_NOTES.filter((sample) => stored.get(sample.title) === sample.content);
-    return response.status(200).json({ sampleMarker: 'SAMPLE_NOTE_1', notes });
+      .insert({ id, owner_id: identity.userId, title: body.title.trim(), content: body.body.trim() })
+      .select('id')
+      .single();
+    if (error) return apiError(response, error.code === '23505' ? 409 : 502,
+      error.code === '23505' ? 'ID_CONFLICT' : 'NOTES_UNAVAILABLE');
+    return response.status(201).json({ id: data.id });
   } catch {
-    return response.status(500).json({ error: 'NOTES_UNAVAILABLE' });
+    return apiError(response, 500, 'NOTES_UNAVAILABLE');
   }
 }
