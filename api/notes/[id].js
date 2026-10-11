@@ -75,6 +75,7 @@ export default async function handler(request, response) {
         .from('learning_notes')
         .select('id, title, content')
         .eq('id', id)
+        .eq('owner_id', identity.userId)
         .maybeSingle();
       if (error) return apiError(response, 502, 'NOTES_UNAVAILABLE');
       if (!data) return apiError(response, 404, 'NOTE_NOT_FOUND');
@@ -84,23 +85,28 @@ export default async function handler(request, response) {
     if (request.method === 'PUT') {
       const body = parseBody(request);
       if (!validFields(body)) return apiError(response, 400, 'INVALID_NOTE');
-      // Ownership is intentionally not checked here; the next defense step adds it.
       const { data, error } = await supabase
         .from('learning_notes')
-        .update({ title: body.title.trim(), content: body.body.trim() })
+        .update({
+          owner_id: identity.userId,
+          title: body.title.trim(),
+          content: body.body.trim(),
+        })
         .eq('id', id)
-        .select('id, title, content')
+        .eq('owner_id', identity.userId)
+        .select('id, title, content, owner_id')
         .maybeSingle();
       if (error) return apiError(response, 502, 'NOTES_UNAVAILABLE');
       if (!data) return apiError(response, 404, 'NOTE_NOT_FOUND');
+      if (data.owner_id !== identity.userId) return apiError(response, 404, 'NOTE_NOT_FOUND');
       return response.status(200).json({ id: data.id, title: data.title, body: data.content });
     }
 
-    // Ownership is intentionally not checked here; the next defense step adds it.
     const { data, error } = await supabase
       .from('learning_notes')
       .delete()
       .eq('id', id)
+      .eq('owner_id', identity.userId)
       .select('id')
       .maybeSingle();
     if (error) return apiError(response, 502, 'NOTES_UNAVAILABLE');
