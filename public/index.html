@@ -10,8 +10,18 @@
     main { max-width: 760px; margin: 0 auto; padding: 44px 22px 64px; }
     .eyebrow { color: #8ad8df; font-size: 14px; font-weight: 700; letter-spacing: .08em; }
     h1 { margin: 16px 0; font-size: clamp(30px, 7vw, 48px); line-height: 1.2; }
+    h2 { margin: 0 0 16px; font-size: 22px; }
     p { font-size: 17px; line-height: 1.7; color: #bfd0e5; }
     .notice { margin: 26px 0; padding: 18px; border: 1px solid #d07384; border-radius: 14px; color: #ffe3e8; background: #612a3544; }
+    .auth-card { margin: 24px 0; padding: 22px; border: 1px solid #51667c; border-radius: 16px; background: #16263a; }
+    .auth-form { display: grid; gap: 14px; }
+    label { display: grid; gap: 7px; color: #dbe8f7; font-weight: 600; }
+    input { box-sizing: border-box; width: 100%; padding: 12px 13px; border: 1px solid #61768d; border-radius: 9px; background: #0d1724; color: #ecf4ff; font: inherit; }
+    input:focus-visible, button:focus-visible { outline: 3px solid #8ad8df; outline-offset: 2px; }
+    button { width: fit-content; padding: 11px 17px; border: 0; border-radius: 9px; background: #8ad8df; color: #10202b; font: inherit; font-weight: 700; cursor: pointer; }
+    button:disabled { cursor: wait; opacity: .65; }
+    .auth-message { min-height: 1.5em; margin: 12px 0 0; color: #ffb9c4; font-size: 15px; overflow-wrap: anywhere; }
+    .account { color: #bfd0e5; }
     ul { list-style: none; display: grid; gap: 12px; padding: 0; }
     li { border: 1px solid #51667c; border-radius: 14px; padding: 17px 19px; background: #1a2a3d; }
     strong { display: block; font-size: 18px; margin-bottom: 5px; }
@@ -23,6 +33,24 @@
     <div class="eyebrow">BYTE BACK · 2단계 보호 실습</div>
     <h1>학습용 자료실</h1>
     <p>표시되는 네 건은 학습용으로 만든 가상 메모이며 Supabase에서 읽습니다.</p>
+    <section class="auth-card" aria-labelledby="auth-heading">
+      <h2 id="auth-heading">이메일 로그인</h2>
+      <p id="auth-status" role="status" aria-live="polite">로그인 상태를 확인하고 있습니다.</p>
+      <form id="login-form" class="auth-form" hidden>
+        <label for="email">이메일
+          <input id="email" name="email" type="email" autocomplete="username" required>
+        </label>
+        <label for="password">비밀번호
+          <input id="password" name="password" type="password" autocomplete="current-password" required>
+        </label>
+        <button id="login-button" type="submit">로그인</button>
+      </form>
+      <div id="account-panel" hidden>
+        <p class="account">로그인됨: <span id="account-email"></span></p>
+        <button id="logout-button" type="button">로그아웃</button>
+      </div>
+      <p id="auth-message" class="auth-message" role="alert" aria-live="assertive"></p>
+    </section>
     <div class="notice">자료 API는 로그인 없이 공개적으로 호출할 수 있습니다. 지금은 가상 메모만 반환하며, 실제 학생 자료를 저장하거나 연결하지 마세요.</div>
     <ul id="notes" aria-live="polite"><li>가상 자료를 불러오는 중입니다.</li></ul>
   </main>
@@ -52,6 +80,66 @@
       const item = document.createElement('li');
       item.textContent = '자료를 불러오지 못했습니다.';
       list.replaceChildren(item);
+    }
+
+    const authStatus = document.querySelector('#auth-status');
+    const authMessage = document.querySelector('#auth-message');
+    const loginForm = document.querySelector('#login-form');
+    const loginButton = document.querySelector('#login-button');
+    const accountPanel = document.querySelector('#account-panel');
+    const accountEmail = document.querySelector('#account-email');
+    const logoutButton = document.querySelector('#logout-button');
+    const supabaseUrl = 'https://vawsiksoqqwadrfcebsh.supabase.co';
+    const publishableKey = 'sb_publishable_pH1_AYAXLxPCboWsYwhDSQ_E4r86Teq';
+
+    try {
+      const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2.117.2');
+      const supabase = createClient(supabaseUrl, publishableKey);
+
+      supabase.auth.onAuthStateChange((_event, session) => {
+        const signedIn = Boolean(session?.user);
+        loginForm.hidden = signedIn;
+        accountPanel.hidden = !signedIn;
+        accountEmail.textContent = session?.user?.email ?? '';
+        authStatus.textContent = signedIn ? '로그인되어 있습니다.' : '이메일과 비밀번호로 로그인하세요.';
+      });
+
+      loginForm.addEventListener('submit', async event => {
+        event.preventDefault();
+        authMessage.textContent = '';
+        loginButton.disabled = true;
+        loginButton.textContent = '로그인 중…';
+        const formData = new FormData(loginForm);
+        try {
+          const { error } = await supabase.auth.signInWithPassword({
+            email: String(formData.get('email')).trim(),
+            password: String(formData.get('password')),
+          });
+          if (error) authMessage.textContent = error.message;
+        } catch (error) {
+          authMessage.textContent = error instanceof Error ? error.message : '로그인 요청에 실패했습니다.';
+        } finally {
+          loginButton.disabled = false;
+          loginButton.textContent = '로그인';
+        }
+      });
+
+      logoutButton.addEventListener('click', async () => {
+        authMessage.textContent = '';
+        logoutButton.disabled = true;
+        try {
+          const { error } = await supabase.auth.signOut({ scope: 'local' });
+          if (error) authMessage.textContent = error.message;
+        } catch (error) {
+          authMessage.textContent = error instanceof Error ? error.message : '로그아웃 요청에 실패했습니다.';
+        } finally {
+          logoutButton.disabled = false;
+        }
+      });
+    } catch (error) {
+      loginForm.hidden = true;
+      authStatus.textContent = '로그인 기능을 시작하지 못했습니다.';
+      authMessage.textContent = error instanceof Error ? error.message : 'Supabase 로그인 기능을 불러오지 못했습니다.';
     }
   </script>
 </body>
