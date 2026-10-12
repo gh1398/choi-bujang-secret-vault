@@ -29,7 +29,9 @@ export function deploymentIdentity(env, config) {
       || typeof config.judgeIssuer !== 'string'
       || !/^https:\/\/[a-z0-9-]+\.up\.railway\.app\/defense\/judge$/iu.test(config.judgeIssuer)
       || typeof config.sampleMarker !== 'string'
-      || !/^[A-Z0-9_]{1,80}$/u.test(config.sampleMarker)) {
+      || !/^[A-Z0-9_]{1,80}$/u.test(config.sampleMarker)
+      || !Array.isArray(config.allowedRoutes)
+      || config.allowedRoutes.some((route) => typeof route !== 'string' || !route.trim())) {
     throw new Error('배포 식별 정보 또는 2단계 이후 설정을 확인할 수 없습니다.');
   }
   return {
@@ -41,5 +43,6 @@ export function deploymentIdentity(env, config) {
     judgeIssuer: config.judgeIssuer,
     sampleMarker: config.sampleMarker,
     originalApiUrl,
+    allowedRoutes: config.allowedRoutes,
   };
 }
