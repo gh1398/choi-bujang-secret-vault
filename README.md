@@ -4,10 +4,10 @@
 
 ## 현재 동작
 
-- `/` 화면은 Supabase 이메일 로그인 후 `/api/notes`와 `/api/notes/:id`를 호출해 로그인 사용자의 가상 메모를 관리합니다.
+- `/` 화면은 `/api/auth/login`, `/api/auth/session`, `/api/auth/logout` 서버 함수를 통해 이메일 로그인·세션 확인·로그아웃을 처리하고, `/api/notes`와 `/api/notes/:id`로 가상 메모를 관리합니다. Supabase 공개 키와 세션 토큰은 화면 코드에서 사용하지 않습니다. 서버는 access/refresh 토큰을 HttpOnly 쿠키로 관리합니다.
 - `api/notes.js`의 목록은 검증된 사용자 ID의 메모만 반환하고, 추가할 때 서버가 확인한 ID를 `owner_id`로 저장합니다. 단건 GET·PUT·DELETE도 DB의 `owner_id`를 검증된 사용자 ID와 비교하며, 타인 소유 또는 없는 메모는 404로 거부합니다. PUT은 저장할 `owner_id`도 검증된 사용자 ID로 설정하고 반환된 소유자를 확인합니다.
-- 모든 자료 API 경로는 `Authorization: Bearer <Supabase access token>`을 요구합니다. `src/verify-login.mjs`가 Supabase Auth 발급자·대상·만료를 검증하고, 브라우저의 `userId`·`role`과 URL·본문의 `owner_id`는 신뢰하지 않습니다. 토큰이 없거나 검증에 실패하면 401로 자료 없이 거부합니다. DB 권한/RLS SQL은 별도 검토·적용 대상입니다.
-- 서버 함수는 Vercel 환경 변수 `SUPABASE_URL`과 `SUPABASE_SECRET_KEY`를 사용합니다. 프로젝트 설정의 환경 변수 화면에서 직접 등록하세요. 비밀 키는 브라우저 코드, 응답, 로그 또는 Git에 넣지 않습니다. 함수는 오류 상세나 키를 로그로 남기지 않습니다.
+- 자료 API는 `src/verify-login.mjs`가 Supabase Auth 발급자·대상·만료를 검증한 세션만 허용하고, 브라우저의 `userId`·`role`과 URL·본문의 `owner_id`는 신뢰하지 않습니다. 토큰이 없거나 검증에 실패하면 401로 자료 없이 거부합니다. DB 권한/RLS SQL은 별도 검토·적용 대상입니다.
+- 로그인 서버 함수는 Vercel 환경 변수 `SUPABASE_URL`과 서버 전용 `SUPABASE_SECRET_KEY`를 사용합니다. 세션 토큰은 HttpOnly 쿠키로만 전달되며, 비밀번호·키·토큰을 브라우저 코드, JSON 응답, 로그 또는 Git에 넣지 않습니다. 로그인 실패 이유는 화면에 표시합니다.
 - `aleph.config.json`의 `originalApiUrl`은 원본 자료 HTTPS 경로이며 쿼리가 없습니다. Vercel 배포 빌드는 이 값을 `/aleph.json`에도 기록합니다.
 - Vercel 빌드는 공개 `data.json`을 만들지 않습니다. 배포 빌드는 Vercel Git/배포 정보를 검증해 `/aleph.json`을 계속 생성합니다.
 

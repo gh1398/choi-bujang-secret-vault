@@ -1,28 +1,12 @@
 import { randomUUID } from 'node:crypto';
-import { readFileSync } from 'node:fs';
 import { createClient } from '@supabase/supabase-js';
-import { createLoginVerifier } from '../src/verify-login.mjs';
+import { getServerSession } from '../src/session-auth.mjs';
 
-const config = JSON.parse(readFileSync(new URL('../aleph.config.json', import.meta.url), 'utf8'));
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
-let verifyLogin;
 
-function getLoginVerifier() {
-  verifyLogin ??= createLoginVerifier({
-    config,
-    supabaseSecretKey: process.env.SUPABASE_SECRET_KEY,
-  });
-  return verifyLogin;
-}
-
-async function authenticatedUser(request) {
-  const authorization = request.headers?.authorization ?? request.headers?.Authorization;
-  try {
-    const identity = await getLoginVerifier()(authorization);
-    return identity?.kind === 'student' ? identity : null;
-  } catch {
-    return null;
-  }
+async function authenticatedUser(request, response) {
+  const session = await getServerSession(request, response);
+  return session?.identity?.kind === 'student' ? session.identity : null;
 }
 
 function getSupabase() {
@@ -61,7 +45,7 @@ export default async function handler(request, response) {
     return apiError(response, 405, 'METHOD_NOT_ALLOWED');
   }
 
-  const identity = await authenticatedUser(request);
+  const identity = await authenticatedUser(request, response);
   if (!identity) return apiError(response, 401, 'UNAUTHORIZED');
 
   const supabase = getSupabase();

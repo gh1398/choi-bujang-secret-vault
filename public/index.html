@@ -36,7 +36,7 @@
 </head>
 <body>
   <main>
-    <div class="eyebrow">BYTE BACK · 3단계 보호 실습</div>
+    <div class="eyebrow">BYTE BACK · 5단계 보호 실습</div>
     <h1>학습용 자료실</h1>
     <p>로그인한 사용자의 가상 메모를 관리합니다.</p>
     <section class="auth-card" aria-labelledby="auth-heading">
@@ -57,7 +57,7 @@
       </div>
       <p id="auth-message" class="auth-message" role="alert" aria-live="assertive"></p>
     </section>
-    <div class="notice">4단계에서 단건 자료의 소유자 검사를 추가할 예정입니다. 현재는 유효한 로그인 토큰만 확인하므로, 메모 ID를 아는 다른 로그인 사용자가 해당 메모를 읽거나 수정·삭제할 수 있습니다.</div>
+    <div class="notice">메모 자료 요청은 서버에서 로그인과 소유자를 확인합니다. 다른 계정의 메모는 읽거나 수정·삭제할 수 없습니다.</div>
     <section id="crud-panel" hidden aria-labelledby="notes-heading">
       <section class="composer">
         <h2>가상 메모 추가</h2>
@@ -96,9 +96,7 @@
       NOTE_NOT_FOUND: '메모를 찾을 수 없습니다.',
       ID_CONFLICT: '이미 사용 중인 메모 ID입니다.',
     };
-    const supabaseUrl = 'https://vawsiksoqqwadrfcebsh.supabase.co';
-    const publishableKey = 'sb_publishable_pH1_AYAXLxPCboWsYwhDSQ_E4r86Teq';
-    let currentSession = null;
+    let currentUser = null;
     let sessionRevision = 0;
 
     function showListMessage(message) {
@@ -107,12 +105,37 @@
       notesList.replaceChildren(item);
     }
 
-    async function apiRequest(path, options = {}) {
-      if (!currentSession?.access_token) throw new Error(apiErrors.UNAUTHORIZED);
+    async function authRequest(path, options = {}) {
       const headers = new Headers(options.headers);
-      headers.set('Authorization', `Bearer ${currentSession.access_token}`);
       if (options.body) headers.set('Content-Type', 'application/json');
-      const response = await fetch(path, { ...options, headers, cache: 'no-store' });
+      const response = await fetch(path, {
+        ...options, headers, credentials: 'same-origin', cache: 'no-store',
+      });
+      let data = null;
+      try { data = await response.json(); } catch {}
+      if (!response.ok) {
+        throw new Error(data?.message ?? apiErrors[data?.error] ?? '로그인 요청을 처리하지 못했습니다.');
+      }
+      return data;
+    }
+
+    async function apiRequest(path, options = {}) {
+      if (!currentUser) throw new Error(apiErrors.UNAUTHORIZED);
+      const headers = new Headers(options.headers);
+      if (options.body) headers.set('Content-Type', 'application/json');
+      const send = () => fetch(path, {
+        ...options, headers, credentials: 'same-origin', cache: 'no-store',
+      });
+      let response = await send();
+      if (response.status === 401) {
+        try {
+          await authRequest('/api/auth/session');
+          response = await send();
+        } catch {
+          setCurrentUser(null);
+          throw new Error(apiErrors.UNAUTHORIZED);
+        }
+      }
       let data = null;
       try { data = await response.json(); } catch {}
       if (!response.ok) throw new Error(apiErrors[data?.error] ?? '자료 요청을 처리하지 못했습니다.');
@@ -204,14 +227,14 @@
 
     async function loadNotes() {
       const revision = sessionRevision;
-      if (!currentSession?.access_token) {
+      if (!currentUser) {
         showListMessage('로그인하면 내 가상 메모가 표시됩니다.');
         return;
       }
       showListMessage('메모를 불러오는 중입니다.');
       try {
         const notes = await apiRequest('/api/notes');
-        if (revision !== sessionRevision || !currentSession) return;
+        if (revision !== sessionRevision || !currentUser) return;
         if (!Array.isArray(notes)) throw new Error('메모 응답 형식이 올바르지 않습니다.');
         if (!notes.length) showListMessage('메모가 없습니다. 새 메모를 추가해 보세요.');
         else notesList.replaceChildren(...notes.map(renderNote));
@@ -240,59 +263,59 @@
       }
     });
 
-    try {
-      const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2.117.2');
-      const supabase = createClient(supabaseUrl, publishableKey);
-      supabase.auth.onAuthStateChange((_event, session) => {
-        currentSession = session;
-        sessionRevision += 1;
-        const signedIn = Boolean(session?.user);
-        loginForm.hidden = signedIn;
-        accountPanel.hidden = !signedIn;
-        crudPanel.hidden = !signedIn;
-        accountEmail.textContent = session?.user?.email ?? '';
-        authStatus.textContent = signedIn ? '로그인되어 있습니다.' : '이메일과 비밀번호로 로그인하세요.';
-        if (!signedIn) showListMessage('로그인하면 내 가상 메모가 표시됩니다.');
-        else void loadNotes();
-      });
+    function setCurrentUser(user) {
+      currentUser = user && typeof user.id === 'string' ? user : null;
+      sessionRevision += 1;
+      const signedIn = Boolean(currentUser);
+      loginForm.hidden = signedIn;
+      accountPanel.hidden = !signedIn;
+      crudPanel.hidden = !signedIn;
+      accountEmail.textContent = currentUser?.email ?? '';
+      authStatus.textContent = signedIn ? '로그인되어 있습니다.' : '이메일과 비밀번호로 로그인하세요.';
+      if (!signedIn) showListMessage('로그인하면 내 가상 메모가 표시됩니다.');
+      else void loadNotes();
+    }
 
-      loginForm.addEventListener('submit', async event => {
-        event.preventDefault();
-        authMessage.textContent = '';
-        loginButton.disabled = true;
-        loginButton.textContent = '로그인 중…';
-        const formData = new FormData(loginForm);
-        try {
-          const { error } = await supabase.auth.signInWithPassword({
+    loginForm.addEventListener('submit', async event => {
+      event.preventDefault();
+      authMessage.textContent = '';
+      loginButton.disabled = true;
+      loginButton.textContent = '로그인 중…';
+      const formData = new FormData(loginForm);
+      try {
+        const result = await authRequest('/api/auth/login', {
+          method: 'POST',
+          body: JSON.stringify({
             email: String(formData.get('email')).trim(),
             password: String(formData.get('password')),
-          });
-          if (error) authMessage.textContent = error.message;
-        } catch (error) {
-          authMessage.textContent = error instanceof Error ? error.message : '로그인 요청에 실패했습니다.';
-        } finally {
-          loginButton.disabled = false;
-          loginButton.textContent = '로그인';
-        }
-      });
+          }),
+        });
+        loginForm.reset();
+        setCurrentUser(result.user);
+      } catch (error) {
+        authMessage.textContent = error instanceof Error ? error.message : '로그인 요청에 실패했습니다.';
+      } finally {
+        loginButton.disabled = false;
+        loginButton.textContent = '로그인';
+      }
+    });
 
-      logoutButton.addEventListener('click', async () => {
-        authMessage.textContent = '';
-        logoutButton.disabled = true;
-        try {
-          const { error } = await supabase.auth.signOut({ scope: 'local' });
-          if (error) authMessage.textContent = error.message;
-        } catch (error) {
-          authMessage.textContent = error instanceof Error ? error.message : '로그아웃 요청에 실패했습니다.';
-        } finally {
-          logoutButton.disabled = false;
-        }
-      });
-    } catch (error) {
-      loginForm.hidden = true;
-      authStatus.textContent = '로그인 기능을 시작하지 못했습니다.';
-      authMessage.textContent = error instanceof Error ? error.message : 'Supabase 로그인 기능을 불러오지 못했습니다.';
-    }
+    logoutButton.addEventListener('click', async () => {
+      authMessage.textContent = '';
+      logoutButton.disabled = true;
+      try {
+        await authRequest('/api/auth/logout', { method: 'POST' });
+        setCurrentUser(null);
+      } catch (error) {
+        authMessage.textContent = error instanceof Error ? error.message : '로그아웃 요청에 실패했습니다.';
+      } finally {
+        logoutButton.disabled = false;
+      }
+    });
+
+    void authRequest('/api/auth/session')
+      .then(result => setCurrentUser(result.user))
+      .catch(() => setCurrentUser(null));
   </script>
 </body>
 </html>
