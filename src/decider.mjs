@@ -23,12 +23,15 @@ export function inspectAccessContext(request) {
       && Number.isFinite(event.count))
     ? request.recentEvents : null;
   const behavior = signalSource === 'unknown' ? null : events;
+  const parsedHour = Number.isInteger(hour) ? hour
+    : typeof hour === 'string' && /^\d{1,2}$/u.test(hour) ? Number(hour) : null;
 
   return {
     signals: {
       source: signalSource,
       region: hasTrustedSignals && typeof region === 'string' && region.trim() ? region : null,
-      hour: hasTrustedSignals && Number.isInteger(hour) && hour >= 0 && hour <= 23 ? hour : null,
+      hour: hasTrustedSignals && parsedHour !== null && parsedHour >= 0 && parsedHour <= 23
+        ? parsedHour : null,
       network: hasTrustedSignals && typeof network === 'string' && network.trim() ? network : null,
     },
     behavior: {
@@ -43,11 +46,15 @@ function needsStepUp(request) {
   const context = inspectAccessContext(request);
   if (context.signals.source === 'none' || context.signals.source === 'unknown') return false;
 
-  const hour = context.signals.hour;
+  const rawHour = context.signals.hour;
+  const hour = Number.isInteger(rawHour) ? rawHour
+    : typeof rawHour === 'string' && /^\d{1,2}$/u.test(rawHour) ? Number(rawHour) : null;
   const offHours = hour !== null && (hour < 6 || hour >= 22);
-  const firstSeenNetwork = context.signals.network === 'first_seen';
+  const networkLabel = context.signals.network?.toLowerCase().replace(/[\s-]+/gu, '_');
+  const firstSeenNetwork = ['first_seen', 'new', 'new_network', 'unfamiliar', 'unrecognized']
+    .includes(networkLabel);
   const suddenReadBurst = context.behavior.events?.some(event =>
-    event.kind === 'read_burst' && event.ageSeconds <= 300 && event.count >= 20) === true;
+    /read/iu.test(event.kind) && event.ageSeconds <= 300 && event.count >= 20) === true;
 
   return offHours && firstSeenNetwork && suddenReadBurst;
 }
