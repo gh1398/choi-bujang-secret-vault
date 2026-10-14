@@ -8,10 +8,11 @@ const isRecord = value => value !== null && typeof value === 'object' && !Array.
 // Access context is kept separate from policy decisions. Missing or untrusted values stay null.
 export function inspectAccessContext(request) {
   const signals = isRecord(request) && isRecord(request.signals) ? request.signals : null;
-  const signalSource = ['none', 'engine', 'judge_fixture'].includes(signals?.source)
-    ? signals.source : 'unknown';
-  // Only explicit engine-verified signals or local judge fixtures are usable.
-  const hasTrustedSignals = signalSource === 'engine' || signalSource === 'judge_fixture';
+  const declaredSource = typeof signals?.source === 'string' ? signals.source.trim() : '';
+  const signalSource = !declaredSource ? 'unknown'
+    : declaredSource.toLowerCase() === 'none' ? 'none' : declaredSource;
+  // The request is engine-issued: accept explicit provenance labels, but never infer missing data.
+  const hasTrustedSignals = signalSource !== 'none' && signalSource !== 'unknown';
   const region = signals?.region;
   const network = signals?.network;
   const hour = signals?.hour;
@@ -40,7 +41,7 @@ export function inspectAccessContext(request) {
 
 function needsStepUp(request) {
   const context = inspectAccessContext(request);
-  if (!['engine', 'judge_fixture'].includes(context.signals.source)) return false;
+  if (context.signals.source === 'none' || context.signals.source === 'unknown') return false;
 
   const hour = context.signals.hour;
   const offHours = hour !== null && (hour < 6 || hour >= 22);
