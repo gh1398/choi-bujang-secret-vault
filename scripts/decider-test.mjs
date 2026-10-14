@@ -26,6 +26,13 @@ export async function checkDecider({ decide, ruleIds }) {
   const { normal, suspicious } = fixtureRequests();
   const checks = [
     { name: '등록 기기의 정상 요청', request: normal, decision: 'allow' },
+    { name: '엔진 출처 정상 신호', request: { ...normal, requestId: randomUUID(),
+      signals: { source: 'engine', region: 'local', network: 'usual', hour: 14 } }, decision: 'allow' },
+    { name: '엔진 출처 복합 이상 신호', request: { ...suspicious, requestId: randomUUID(),
+      signals: { ...suspicious.signals, source: 'engine' } }, decision: 'step_up',
+    reasonCode: 'step_up_required' },
+    { name: '출처 없는 신호는 추정하지 않음', request: { ...suspicious, requestId: randomUUID(),
+      signals: { source: 'none', region: 'unknown', network: 'unknown', hour: null } }, decision: 'allow' },
     { name: '미등록 기기의 가상 요청', request: { ...normal, requestId: randomUUID(),
       deviceRegistered: false }, decision: 'deny', reasonCode: 'device_not_registered' },
   ];

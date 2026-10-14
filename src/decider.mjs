@@ -8,9 +8,10 @@ const isRecord = value => value !== null && typeof value === 'object' && !Array.
 // Access context is kept separate from policy decisions. Missing or untrusted values stay null.
 export function inspectAccessContext(request) {
   const signals = isRecord(request) && isRecord(request.signals) ? request.signals : null;
-  const signalSource = signals?.source === 'none' || signals?.source === 'judge_fixture'
+  const signalSource = ['none', 'engine', 'judge_fixture'].includes(signals?.source)
     ? signals.source : 'unknown';
-  const fromFixture = signalSource === 'judge_fixture';
+  // Only explicit engine-verified signals or local judge fixtures are usable.
+  const hasTrustedSignals = signalSource === 'engine' || signalSource === 'judge_fixture';
   const region = signals?.region;
   const network = signals?.network;
   const hour = signals?.hour;
@@ -25,13 +26,13 @@ export function inspectAccessContext(request) {
   return {
     signals: {
       source: signalSource,
-      region: fromFixture && typeof region === 'string' && region.trim() ? region : null,
-      hour: fromFixture && Number.isInteger(hour) && hour >= 0 && hour <= 23 ? hour : null,
-      network: fromFixture && typeof network === 'string' && network.trim() ? network : null,
+      region: hasTrustedSignals && typeof region === 'string' && region.trim() ? region : null,
+      hour: hasTrustedSignals && Number.isInteger(hour) && hour >= 0 && hour <= 23 ? hour : null,
+      network: hasTrustedSignals && typeof network === 'string' && network.trim() ? network : null,
     },
     behavior: {
       source: behavior === null ? 'unknown'
-        : fromFixture ? 'judge_fixture' : 'engine',
+        : signalSource === 'judge_fixture' ? 'judge_fixture' : 'engine',
       events: behavior,
     },
   };
@@ -39,7 +40,7 @@ export function inspectAccessContext(request) {
 
 function needsStepUp(request) {
   const context = inspectAccessContext(request);
-  if (context.signals.source !== 'judge_fixture') return false;
+  if (!['engine', 'judge_fixture'].includes(context.signals.source)) return false;
 
   const hour = context.signals.hour;
   const offHours = hour !== null && (hour < 6 || hour >= 22);
