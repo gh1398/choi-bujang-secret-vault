@@ -1,6 +1,6 @@
-# BYTE BACK 방어전 시작 틀 R5 · 6단계
+# BYTE BACK 방어전 시작 틀 R5 · 7단계
 
-이 저장소는 BYTE BACK 방어전 6단계의 학습용 자료실과 기기 등록 판정기입니다. 자료 네 건은 모두 가상 메모이며 실제 학생 자료, 토큰, 비밀키를 저장하지 마세요.
+이 저장소는 BYTE BACK 방어전 7단계의 학습용 자료실과 가상 접근 판정기입니다. 자료 네 건은 모두 가상 메모이며 실제 학생 자료, 토큰, 비밀키를 저장하지 마세요.
 
 ## 현재 동작
 
@@ -10,7 +10,7 @@
 - 로그인 서버 함수는 Vercel 환경 변수 `SUPABASE_URL`과 서버 전용 `SUPABASE_SECRET_KEY`를 사용합니다. 세션 토큰은 HttpOnly 쿠키로만 전달되며, 비밀번호·키·토큰을 브라우저 코드, JSON 응답, 로그 또는 Git에 넣지 않습니다. 로그인 실패 이유는 화면에 표시합니다.
 - `aleph.config.json`의 `originalApiUrl`은 원본 자료 HTTPS 경로이며 쿼리가 없습니다. Vercel 배포 빌드는 이 값을 `/aleph.json`에도 기록합니다.
 - Vercel 빌드는 공개 `data.json`을 만들지 않습니다. 배포 빌드는 Vercel Git/배포 정보를 검증해 `/aleph.json`을 계속 생성합니다.
-- `src/decider.mjs`는 계약의 `deviceRegistered`가 `true`일 때만 허용합니다. 미등록 또는 값이 없는 요청은 `device_not_registered`로 거부합니다. `npm run decider:test`는 정상 등록 요청과 미등록 가상 요청을 확인하며 실제 미등록 기기 공격은 심판이 맡습니다.
+- `src/decider.mjs`는 `device_registered` 규칙으로 미등록 기기를 `device_not_registered` 사유로 거부합니다. 가상 신호의 출처가 명확하고 22:00–05:59, 처음 보는 네트워크, 최근 300초 이내 `read_burst` 20건 이상이 함께 있으면 `step_up_required`로 추가 확인을 요청합니다. 지역은 이 규칙의 차단 기준이 아닙니다.
 
 ## 설정 및 실행
 
@@ -20,16 +20,18 @@ Vercel 프로젝트 설정의 Environment Variables에 `SUPABASE_URL`과 `SUPABA
 
 로컬 정적 미리보기는 `npm run build -- --local`로 준비할 수 있습니다. 이 명령은 `/aleph.json`을 만들지 않으며 Vercel 배포나 Supabase 연결을 증명하지 않습니다. 로컬 API 실행은 Vercel 개발 환경을 사용하세요.
 
-## 판정기 등록 기기 확인
+## 판정기 가상 사건 확인
 
-저장소 루트에서 `npm run decider:test`를 실행해 판정기 로컬 연습을 확인합니다. 별도 접속 프로그램 설치 없이 실행하며, 아래 두 결과가 모두 `통과`여야 합니다.
+저장소 루트에서 `npm run decider:test`와 `npm run fixture:7`을 실행해 판정기 로컬 연습을 확인합니다. 별도 접속 프로그램 설치 없이 실행합니다. 정상 등록 요청은 `allow`, 미등록 가상 요청은 `deny`와 `device_not_registered`, 복합 이상 가상 사건은 `step_up`과 `step_up_required`가 예상 결과입니다. 유효한 추가 인증이 포함된 가상 사건은 `allow`가 예상됩니다.
 
 ```text
 통과 · 등록 기기의 정상 요청
 통과 · 미등록 기기의 가상 요청
+정상 사건: allow
+복합 이상 사건: step_up
 ```
 
-두 번째 요청은 연습 스크립트가 `deviceRegistered: false`로 만든 가상 요청이며, `deny`와 `device_not_registered` 응답을 확인합니다. 실제 미등록 기기 공격은 심판이 확인합니다. 이 로컬 연습 결과는 심판 통과 증거가 아닙니다.
+요청 계약에는 같은 로그인 세션의 시작 시각이 없습니다. `subjectId`는 가명 주체 ID이고, `at`은 요청 시각, `stepUp.authAgeSeconds`는 추가 인증 시점의 나이입니다. 따라서 같은 로그인 시각을 이용한 실제 자료 차단은 구현·시험하지 않았습니다. 미등록 기기 공격과 복합 이상 사건도 이 명령에서는 가상 입력만 사용하며, 로컬 결과는 심판 통과 증거가 아닙니다.
 
 ## 가상 메모 문장 노출 확인
 
